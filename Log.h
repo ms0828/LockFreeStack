@@ -1,7 +1,7 @@
 #pragma once
 #include <stdarg.h>
 #include <strsafe.h> 
-
+#include "RingBuffer.h"
 
 #define dfLOG_LEVEL_DEBUG 0
 #define dfLOG_LEVEL_ERROR 1
@@ -9,6 +9,7 @@
 
 #define LOG_BUFFER_LEN 1024
 
+extern thread_local CRingBuffer gt_LogQ;
 
 #define _LOG(Level, ...)               \
 do{                                    \

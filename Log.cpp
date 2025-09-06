@@ -6,6 +6,8 @@ static FILE* g_LogFile;
 static int g_LogLevel;
 static SRWLOCK g_LogLock;
 thread_local wchar_t gt_LogBuf[LOG_BUFFER_LEN];
+thread_local CRingBuffer gt_LogQ;
+
 
 bool InitLog(int logLevel)
 {
@@ -46,9 +48,9 @@ void Log(int level, const wchar_t* fmt, ...)
 	HRESULT hr = StringCchVPrintfW(gt_LogBuf + prefixLen, LOG_BUFFER_LEN - prefixLen, fmt, ap);
 	va_end(ap);
 
-	AcquireSRWLockExclusive(&g_LogLock);
+	//AcquireSRWLockExclusive(&g_LogLock);
 	fputws(gt_LogBuf, g_LogFile);
 	//fflush(g_LogFile);
-	ReleaseSRWLockExclusive(&g_LogLock);
+	//ReleaseSRWLockExclusive(&g_LogLock);
 }
 

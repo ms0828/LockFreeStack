@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#define dfDataNum 2
+#define dfDataNum 4
 
 CLockFreeStack<int> g_Stack;
 
@@ -44,6 +44,12 @@ int main()
 	HANDLE testTh4 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh5 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh6 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
+	HANDLE testTh7 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
+	HANDLE testTh8 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
+	HANDLE testTh9 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
+	HANDLE testTh10 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
+
+
 
 	
 	startEvent = CreateEvent(nullptr, true, false, nullptr);
