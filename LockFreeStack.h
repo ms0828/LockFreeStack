@@ -4,25 +4,7 @@
 
 #define STALL() do { if ((__rdtsc() & 0xFF)==0) { YieldProcessor(); } } while(0)
 
-//--------------------------------------------
-// 테스트를 위한 스핀락
-//--------------------------------------------
-ULONG lock = 0;
-void SpinLock()
-{
-	while (InterlockedExchange(&lock, 1) == 1)
-	{
-		YieldProcessor();
-	}
-}
-
-void SpinUnlock()
-{
-	InterlockedExchange(&lock, 0);
-}
-
-
-
+static ULONG g_LogSequence;
 
 //--------------------------------------------
 // 락 프리 스택 구현체
@@ -43,15 +25,6 @@ public:
 	public:
 		T data;
 		Node* next;
-	};
-
-
-
-	struct st_LogData
-	{
-		Node* nodePtr;
-		Node* nextNodePtr;
-		int data;
 	};
 
 
@@ -77,61 +50,73 @@ public:
 		Node* t = nullptr;
 		Node* newNode = new Node;
 		newNode->data = data;
+		__int64 startTick = 0;
+		__int64 commitTick = 0;
+
 		do
 		{
+			startTick = __rdtsc();
 			t = top;
 			newNode->next = t;
-			STALL();
 		} while (InterlockedCompareExchangePointer((void* volatile*)&top, newNode, t) != t);
+		commitTick = __rdtsc();
 		InterlockedIncrement(&stackSize);
-
-		/*st_LogData logData;
-		logData.nodePtr = newNode;
-		logData.nextNodePtr = t;
-		logData.data = data;
-		gt_LogQ.Enqueue((char*)&logData, sizeof(st_LogData));*/
-
-		//_LOG(dfLOG_LEVEL_DEBUG, L"Push : InsertNodeAddress = %016llx / data = %d \n", newNode, data);
-		//SpinLock();
-		printf("Push : insertNodeAddress = %016llx / data = %d \n", newNode, data);
-		//SpinUnlock();
+		int logSeq = InterlockedIncrement(&g_LogSequence);
+		_LOG(dfLOG_LEVEL_DEBUG, L" [Push] [startTick : %llu ~ commitTick : %llu]  LogSeq : %d / InsertNodeAddress = %016llx / newNode->next = %016llx / data = %d / stackSize = %d\n", startTick, commitTick, logSeq, newNode, newNode->next, data, stackSize);
 	}
 	
 	T Pop()
 	{
 		Node* t = nullptr;
 		Node* nextTop = nullptr;
+		__int64 startTick = 0;
+		__int64 commitTick = 0;
+
 		do
 		{
+			//-------------------------------------------------------------
+			// 현 스레드가 스택을 반영할 때의 스택을 바라본 시각을 startTick에 저장
+			//-------------------------------------------------------------
+			startTick = __rdtsc();
 			t = top;
+			if (t == nullptr)
+				_LOG(dfLOG_LEVEL_DEBUG, L"[startTick : %llu] top is null!\n", startTick);
 			nextTop = t->next;
-			STALL();
-			// t가 nullptr 인 상황은 이전에 t->next가 null이었고, ABA문제에서 아래 인터락을 빠져나왔다.
+
+			//----------------------------------------------------------
+			// 시행착오
+			// - 파일 로그를 남기려 했으나 속도 저하 때문인지 문제가 발생하지 않았다.
+			// - 로깅용 구조체를 만들어서 메모리에 로그를 저장 vs 문제 발생 예상 구간에 Sleep(0)으로 컨텍스트 스위칭 유발
+			// - ABA 문제 예상 구간에 Sleep(0)을 넣었더니 파일 로그를 남겨도 문제가 잘 발생했다.
+			//----------------------------------------------------------
+			Sleep(0);
 		}while(InterlockedCompareExchangePointer((void* volatile *)&top, nextTop, t) != t);
 		
-		T retData = t->data;
+		//-------------------------------------------------
+		// 현 스레드가 스택에 반영한 시각을 저장
+		// - 이 시각 이후부터는 해당 스택이 변화된 것을 보장
+		//-------------------------------------------------
+		commitTick = __rdtsc();
+
 		InterlockedDecrement(&stackSize);
-
-		/*st_LogData logData;
-		logData.nodePtr = t;
-		logData.nextNodePtr = nextTop;
-		logData.data = retData;
-		gt_LogQ.Enqueue((char*)&logData, sizeof(st_LogData));*/
-
-		//_LOG(dfLOG_LEVEL_DEBUG, L"POP : PopNodeAddress = %016llx / popNode->next = %016llx / data = %d\n", t, nextTop, retData);
-		//SpinLock();
-		printf("POP : popNodeAddress = %016llx / popNode->next = %016llx\n", t, nextTop);
-		//SpinUnlock();
-
-
+		int logSeq = InterlockedIncrement(&g_LogSequence);
+		T retData = t->data;
+		_LOG(dfLOG_LEVEL_DEBUG, L" [POP] [startTick : %llu ~ commitTick : %llu]  LogSeq : %d / PopNodeAddress = %016llx / popNode->next = %016llx / data = %d / stackSize = %d\n", startTick, commitTick, logSeq, t, nextTop, retData, stackSize);
+		 
 		
+
+		//---------------------------------------------------
+		// ABA 문제 검출
+		//---------------------------------------------------
+		if (t && t->data == 0xdddddddd)
+			_LOG(dfLOG_LEVEL_DEBUG, L"LogSeq : %d / current T is Double Free\n", logSeq);
+
 		delete t;
 		return retData;
 	}
 
 public:
 	Node* top;
-
 	ULONG stackSize;
 };
 

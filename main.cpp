@@ -5,7 +5,7 @@
 
 using namespace std;
 
-#define dfDataNum 4
+#define dfDataNum 50000
 
 CLockFreeStack<int> g_Stack;
 
@@ -37,21 +37,20 @@ unsigned int TestLockFreeStackProc(void* arg)
 
 int main()
 {
-	InitLog(dfLOG_LEVEL_DEBUG);
+	InitLog(dfLOG_LEVEL_DEBUG, ELogMode::FILE_DIRECT);
+
 	HANDLE testTh1 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh2 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh3 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh4 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh5 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
-	HANDLE testTh6 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
+	/*HANDLE testTh6 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh7 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh8 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
 	HANDLE testTh9 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
-	HANDLE testTh10 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);
+	HANDLE testTh10 = (HANDLE)_beginthreadex(nullptr, 0, TestLockFreeStackProc, nullptr, 0, nullptr);*/
 
 
-
-	
 	startEvent = CreateEvent(nullptr, true, false, nullptr);
 	SetEvent(startEvent);
 
