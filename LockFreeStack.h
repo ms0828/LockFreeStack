@@ -2,9 +2,14 @@
 #include <Windows.h>
 #include "Log.h"
 
-#define STALL() do { if ((__rdtsc() & 0xFF)==0) { YieldProcessor(); } } while(0)
-
-static ULONG g_LogSequence;
+// 디버깅을 위한 함수
+// 64비트 값을 64자리 이진 wide 문자열로 변환 (선행 0 포함)
+inline void to_bin64(uint64_t v, wchar_t out[65]) 
+{
+	for (int i = 63; i >= 0; --i)
+		out[63 - i] = (v & (1ULL << i)) ? L'1' : L'0';
+	out[64] = L'\0';
+}
 
 //--------------------------------------------
 // 락 프리 스택 구현체
@@ -32,6 +37,8 @@ public:
 	CLockFreeStack()
 	{
 		stackSize = 0;
+		//nodeSequence = (1 << 17) - 2; // 테스트용
+		nodeSequence = 0;
 		top = nullptr;
 	}
 
@@ -44,80 +51,87 @@ public:
 			delete deleteNode;
 		}
 	}
-
+	
 	void Push(T& data)
 	{
 		Node* t = nullptr;
 		Node* newNode = new Node;
+		Node* maskedInsertNode = nullptr;
 		newNode->data = data;
-		__int64 startTick = 0;
-		__int64 commitTick = 0;
 
+		//--------------------------------------------------
+		// 유저 모드 메모리 공간의 상위 17비트를 사용
+		// - 부여하는 nodeID는 2^17의 나머지로써 17비트 이상의 값 방지
+		// - newNode의 상위 17비트에 고유한 nodeID 부여
+		//--------------------------------------------------
+		ULONGLONG nodeID = InterlockedIncrement(&nodeSequence) % (1 << 17);
+		newNode = (Node*)((nodeID << 47) | (ULONGLONG)newNode);
+
+
+		// 디버깅을 위한 코드
+		//wchar_t maskedStr[65], insertStr[65], nextStr[65];
 		do
 		{
-			startTick = __rdtsc();
 			t = top;
-			newNode->next = t;
+			maskedInsertNode = (Node*)((ULONGLONG)newNode & nodeMask);
+			maskedInsertNode->next = t;
+
+			// 디버깅을 위한 코드
+			//to_bin64(reinterpret_cast<uint64_t>(maskedInsertNode), maskedStr);
+			//to_bin64(reinterpret_cast<uint64_t>(newNode), insertStr);
+			//to_bin64(reinterpret_cast<uint64_t>(maskedInsertNode->next), nextStr);
+
 		} while (InterlockedCompareExchangePointer((void* volatile*)&top, newNode, t) != t);
-		commitTick = __rdtsc();
-		InterlockedIncrement(&stackSize);
-		int logSeq = InterlockedIncrement(&g_LogSequence);
-		_LOG(dfLOG_LEVEL_DEBUG, L" [Push] [startTick : %llu ~ commitTick : %llu]  LogSeq : %d / InsertNodeAddress = %016llx / newNode->next = %016llx / data = %d / stackSize = %d\n", startTick, commitTick, logSeq, newNode, newNode->next, data, stackSize);
+		//_LOG(dfLOG_LEVEL_DEBUG, L" [Push] MaskedNode = %016llx / InsertNodeAddress = %016llx / nextNode = %016llx / data = %d\n", maskedInsertNode, newNode, maskedInsertNode->next, data);
+		//_LOG(dfLOG_LEVEL_DEBUG, L" [Push] MaskedNode = %ls \n / InsertNodeAddress = %ls \n / nextNode = %ls \n / data = %d\n", maskedStr, insertStr, nextStr, data);
 	}
 	
+
 	T Pop()
 	{
 		Node* t = nullptr;
 		Node* nextTop = nullptr;
-		__int64 startTick = 0;
-		__int64 commitTick = 0;
+		Node* maskedPopNode = nullptr;
 
+
+
+		// 디버깅을 위한 코드
+		//wchar_t maskedStr[65], popStr[65], nextStr[65];
 		do
 		{
-			//-------------------------------------------------------------
-			// 현 스레드가 스택을 반영할 때의 스택을 바라본 시각을 startTick에 저장
-			//-------------------------------------------------------------
-			startTick = __rdtsc();
 			t = top;
-			if (t == nullptr)
-				_LOG(dfLOG_LEVEL_DEBUG, L"[startTick : %llu] top is null!\n", startTick);
-			nextTop = t->next;
+			maskedPopNode = (Node*)((ULONGLONG)t & nodeMask);
+			nextTop = maskedPopNode->next;
 
-			//----------------------------------------------------------
-			// 시행착오
-			// - 파일 로그를 남기려 했으나 속도 저하 때문인지 문제가 발생하지 않았다.
-			// - 로깅용 구조체를 만들어서 메모리에 로그를 저장 vs 문제 발생 예상 구간에 Sleep(0)으로 컨텍스트 스위칭 유발
-			// - ABA 문제 예상 구간에 Sleep(0)을 넣었더니 파일 로그를 남겨도 문제가 잘 발생했다.
-			//----------------------------------------------------------
+			// 디버깅을 위한 코드
+			//to_bin64(reinterpret_cast<uint64_t>(maskedPopNode), maskedStr);
+			//to_bin64(reinterpret_cast<uint64_t>(t), popStr);
+			//to_bin64(reinterpret_cast<uint64_t>(nextTop), nextStr);
+
 			Sleep(0);
 		}while(InterlockedCompareExchangePointer((void* volatile *)&top, nextTop, t) != t);
-		
-		//-------------------------------------------------
-		// 현 스레드가 스택에 반영한 시각을 저장
-		// - 이 시각 이후부터는 해당 스택이 변화된 것을 보장
-		//-------------------------------------------------
-		commitTick = __rdtsc();
+		T retData = maskedPopNode->data;
+		//_LOG(dfLOG_LEVEL_DEBUG, L" [Pop] [PopNodeAddress = %016llx / nextTop = %016llx / data = %d \n", maskedPopNode, nextTop, retData);
+		//_LOG(dfLOG_LEVEL_DEBUG, L" [Pop] MaskedPopNode = %ls \n / PopNodeAddress = %ls \n / nextTop = %ls \n / data = %d \n", maskedStr, popStr, nextStr, retData);
 
-		InterlockedDecrement(&stackSize);
-		int logSeq = InterlockedIncrement(&g_LogSequence);
-		T retData = t->data;
-		_LOG(dfLOG_LEVEL_DEBUG, L" [POP] [startTick : %llu ~ commitTick : %llu]  LogSeq : %d / PopNodeAddress = %016llx / popNode->next = %016llx / data = %d / stackSize = %d\n", startTick, commitTick, logSeq, t, nextTop, retData, stackSize);
-		 
-		
-
-		//---------------------------------------------------
-		// ABA 문제 검출
-		//---------------------------------------------------
-		if (t && t->data == 0xdddddddd)
-			_LOG(dfLOG_LEVEL_DEBUG, L"LogSeq : %d / current T is Double Free\n", logSeq);
-
-		delete t;
+		delete maskedPopNode;
 		return retData;
 	}
 
 public:
 	Node* top;
-	ULONG stackSize;
+	ULONGLONG stackSize;
+
+	//--------------------------------------------
+	// 노드 생성 시, 노드 포인터 상위17비트에 저장하는 노드의 고유 인덱스
+	//--------------------------------------------
+	ULONGLONG nodeSequence;
+
+	//--------------------------------------------
+	// Node*의 하위 47비트 추출할 마스크
+	//--------------------------------------------
+	static const ULONGLONG nodeMask = (1ULL << 47) - 1;
+
 };
 
 
