@@ -131,6 +131,7 @@
   <ItemGroup>
     <ClInclude Include="LockFreeStack.h" />
     <ClInclude Include="Log.h" />
+    <ClInclude Include="ObjectPool.h" />
     <ClInclude Include="RingBuffer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

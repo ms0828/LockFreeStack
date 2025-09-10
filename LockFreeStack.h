@@ -60,9 +60,7 @@ public:
 		newNode->data = data;
 
 		//--------------------------------------------------
-		// 유저 모드 메모리 공간의 상위 17비트를 사용
-		// - 부여하는 nodeID는 2^17의 나머지로써 17비트 이상의 값 방지
-		// - newNode의 상위 17비트에 고유한 nodeID 부여
+		// newNode(유저 영역의 메모리 주소)의 상위 17비트를 사용하여 노드 ID 부여
 		//--------------------------------------------------
 		ULONGLONG nodeID = InterlockedIncrement(&nodeSequence) % (1 << 17);
 		newNode = (Node*)((nodeID << 47) | (ULONGLONG)newNode);
@@ -94,7 +92,6 @@ public:
 		Node* maskedPopNode = nullptr;
 
 
-
 		// 디버깅을 위한 코드
 		//wchar_t maskedStr[65], popStr[65], nextStr[65];
 		do
@@ -107,8 +104,6 @@ public:
 			//to_bin64(reinterpret_cast<uint64_t>(maskedPopNode), maskedStr);
 			//to_bin64(reinterpret_cast<uint64_t>(t), popStr);
 			//to_bin64(reinterpret_cast<uint64_t>(nextTop), nextStr);
-
-			Sleep(0);
 		}while(InterlockedCompareExchangePointer((void* volatile *)&top, nextTop, t) != t);
 		T retData = maskedPopNode->data;
 		//_LOG(dfLOG_LEVEL_DEBUG, L" [Pop] [PopNodeAddress = %016llx / nextTop = %016llx / data = %d \n", maskedPopNode, nextTop, retData);
