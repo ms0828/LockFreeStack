@@ -4,21 +4,27 @@
 
 using namespace std;
 
-#define dfTestNum 1000000
+#define dfTestNum 3
 #define dfThreadNum 4
 
-CLockFreeStack<ULONGLONG> g_Stack;
+
+struct TestST
+{
+	char ch[4096];
+};
+
+CLockFreeStack<int> g_Stack;
 
 HANDLE g_TestStartEvent;
 HANDLE g_PushEndEvents[dfThreadNum];
 HANDLE g_PopEndEvents[dfThreadNum];
-HANDLE g_ResetEvents[dfThreadNum];
+HANDLE g_CycleEndEvents[dfThreadNum];
 
 struct ThreadArg
 {
 	HANDLE pushEndEvent;
 	HANDLE popEndEvent;
-	HANDLE resetEvent;
+	HANDLE cycleEndEvent;
 };
 
 //-------------------------------------------------------------
@@ -36,13 +42,14 @@ unsigned int PushAndPopProc1(void* arg)
 	{
 		for (int i = 0; i < dfTestNum; ++i)
 		{
-			ULONGLONG pushValue = rand() % 100;
-			g_Stack.Push(pushValue);
+			int a = rand() % 100;
+			//TestST a{ 0, };
+			g_Stack.Push(a);
 		}
 
 		for (int i = 0; i < dfTestNum; ++i)
 		{
-			g_Stack.Pop();
+			int ret = g_Stack.Pop();
 		}
 	}
 
@@ -60,19 +67,20 @@ unsigned int PushAndPopProc2(void* arg)
 	ThreadArg* threadArg = (ThreadArg*)arg;
 	HANDLE pushEndEvent = threadArg->pushEndEvent;
 	HANDLE popEndEvent = threadArg->popEndEvent;
-	HANDLE resetEvent = threadArg->resetEvent;
-	WaitForSingleObject(g_TestStartEvent, INFINITE);
-
-
+	HANDLE cycleEndEvent = threadArg->cycleEndEvent;
+	
 	while (1)
 	{
+		WaitForSingleObject(g_TestStartEvent, INFINITE);
+
 		//--------------------------------------------------
 		// 스레드 Push 시작
 		//--------------------------------------------------
 		for (int i = 0; i < dfTestNum; ++i)
 		{
-			ULONGLONG pushValue = rand() % 100;
-			g_Stack.Push(pushValue);
+			int a = rand() % 100;
+			//TestST a{ 0, };
+			g_Stack.Push(a);
 		}
 		_LOG(dfLOG_LEVEL_DEBUG, L"[Check] A Thread Complete Push \n");
 		SetEvent(pushEndEvent);
@@ -83,7 +91,9 @@ unsigned int PushAndPopProc2(void* arg)
 		// 모든 스레드 Push가 끝나기 기다리기
 		//---------------------------------------------------
 		WaitForMultipleObjects(dfThreadNum, g_PushEndEvents, true, INFINITE);
-
+		
+		// 모든 스레드가 시작을 보장, 끝나기 이전을 보장하는 구간에 StartEvent 리셋
+		ResetEvent(g_TestStartEvent);
 
 		//--------------------------------------------------
 		// 모든 스레드가 Pop 시작
@@ -102,19 +112,15 @@ unsigned int PushAndPopProc2(void* arg)
 
 
 		//---------------------------------------------------
-		// StackSize 검증 
+		// 락 프리 스택의 노드 풀 카운트 검증 
 		//---------------------------------------------------
-		//_LOG(dfLOG_LEVEL_DEBUG, L"[Check] Stack Size = %lld \n", g_Stack.stackSize);
+		if (g_Stack.nodePool.GetPoolCnt() != dfTestNum * dfThreadNum)
+		{
+			_LOG(dfLOG_LEVEL_DEBUG, L"[Error] Node Pool Count = %ld \n", g_Stack.nodePool.GetPoolCnt());
+			exit(1);
+		}
 
-
-		//---------------------------------------------------
-		// 이벤트 초기화
-		//---------------------------------------------------
-		ResetEvent(pushEndEvent);
-		ResetEvent(popEndEvent);
-		//SetEvent(resetEvent);
-		//WaitForMultipleObjects(5, g_ResetEvents, true, INFINITE);
-		//ResetEvent(resetEvent);
+		SetEvent(cycleEndEvent);
 	}
 	
 
@@ -146,10 +152,10 @@ void Test2()
 	{
 		g_PushEndEvents[i] = CreateEvent(nullptr, true, false, nullptr);
 		g_PopEndEvents[i] = CreateEvent(nullptr, true, false, nullptr);
-		g_ResetEvents[i] = CreateEvent(nullptr, true, false, nullptr);
+		g_CycleEndEvents[i] = CreateEvent(nullptr, true, false, nullptr);
 		threadArg[i].pushEndEvent = g_PushEndEvents[i];
 		threadArg[i].popEndEvent = g_PopEndEvents[i];
-		threadArg[i].resetEvent = g_ResetEvents[i];
+		threadArg[i].cycleEndEvent = g_CycleEndEvents[i];
 	}
 
 	//---------------------------------------------------
@@ -165,7 +171,17 @@ void Test2()
 
 	while (1)
 	{
-
+		//---------------------------------------------------
+		// 모든 스레드가 Cycle을 완료하면 이벤트 초기화 및 모든 스레드 싸이클 재실행 이벤트 발동
+		//---------------------------------------------------
+		WaitForMultipleObjects(dfThreadNum, g_CycleEndEvents, true, INFINITE);
+		for (int i = 0; i < dfThreadNum; ++i)
+		{
+			ResetEvent(g_PushEndEvents[i]);
+			ResetEvent(g_PopEndEvents[i]);
+			ResetEvent(g_CycleEndEvents[i]);
+		}
+		SetEvent(g_TestStartEvent);
 	}
 }
 

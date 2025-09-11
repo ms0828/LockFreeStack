@@ -1,6 +1,9 @@
 #pragma once
 #include <Windows.h>
+#include "ObjectPool.h"
 #include "Log.h"
+
+
 
 // 디버깅을 위한 함수
 // 64비트 값을 64자리 이진 wide 문자열로 변환 (선행 0 포함)
@@ -23,7 +26,6 @@ public:
 	public:
 		Node()
 		{
-			data = -1;
 			next = nullptr;
 		};
 
@@ -34,7 +36,7 @@ public:
 
 
 public:
-	CLockFreeStack()
+	CLockFreeStack() : nodePool(false)
 	{
 		stackSize = 0;
 		//nodeSequence = (1 << 17) - 2; // 테스트용
@@ -55,7 +57,8 @@ public:
 	void Push(T& data)
 	{
 		Node* t = nullptr;
-		Node* newNode = new Node;
+		//Node* newNode = new Node;
+		Node* newNode = nodePool.allocObject();
 		Node* maskedInsertNode = nullptr;
 		newNode->data = data;
 
@@ -109,7 +112,8 @@ public:
 		//_LOG(dfLOG_LEVEL_DEBUG, L" [Pop] [PopNodeAddress = %016llx / nextTop = %016llx / data = %d \n", maskedPopNode, nextTop, retData);
 		//_LOG(dfLOG_LEVEL_DEBUG, L" [Pop] MaskedPopNode = %ls \n / PopNodeAddress = %ls \n / nextTop = %ls \n / data = %d \n", maskedStr, popStr, nextStr, retData);
 
-		delete maskedPopNode;
+		//delete maskedPopNode;
+		nodePool.freeObject(maskedPopNode);
 		return retData;
 	}
 
@@ -127,6 +131,8 @@ public:
 	//--------------------------------------------
 	static const ULONGLONG nodeMask = (1ULL << 47) - 1;
 
+
+	CObjectPool<CLockFreeStack::Node> nodePool;
 };
 
 
