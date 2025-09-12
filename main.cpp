@@ -42,7 +42,7 @@ unsigned int PushAndPopProc1(void* arg)
 	{
 		for (int i = 0; i < dfTestNum; ++i)
 		{
-			int a = rand() % 100;
+			int a = 1;
 			//TestST a{ 0, };
 			g_Stack.Push(a);
 		}
@@ -78,7 +78,7 @@ unsigned int PushAndPopProc2(void* arg)
 		//--------------------------------------------------
 		for (int i = 0; i < dfTestNum; ++i)
 		{
-			int a = rand() % 100;
+			int a = 1;
 			//TestST a{ 0, };
 			g_Stack.Push(a);
 		}
