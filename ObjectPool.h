@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include "Log.h"
 
+
 template<typename T>
 class CObjectPool
 {
@@ -56,7 +57,7 @@ public:
 
 	~CObjectPool()
 	{
-		Node* curNode = top;
+		Node* curNode = UnpackingNode(top);
 		while (curNode != nullptr)
 		{
 			Node* deleteNode = curNode;
@@ -70,26 +71,27 @@ public:
 
 	T* allocObject()
 	{
-		Node* t = nullptr;
-		Node* nextTop = nullptr;
-		Node* maskedAllocNode = nullptr;
+		Node* t;
+		Node* nextTop;
+		Node* maskedT;
+
 		do
 		{
 			t = top;
-
+			maskedT = UnpackingNode(t);
 			//----------------------------------------
 			// 풀이 비어있을 때 오브젝트를 새로 생성하여 할당
 			//----------------------------------------
-			if (t == nullptr)
+			if (maskedT == nullptr)
 			{
 				Node* newNode = (Node*)malloc(sizeof(Node));
 				newNode->seed = poolSeed;
+				newNode->next = nullptr;
 				new (newNode) T();
 				return &(newNode->instance);
 			}
-
-			maskedAllocNode = (Node*)((ULONGLONG)t & nodeMask);
-			nextTop = maskedAllocNode->next;
+			
+			nextTop = PackingNode(maskedT->next, GetNodeStamp(t) + 1);
 		} while (InterlockedCompareExchangePointer((void* volatile*)&top, nextTop, t) != t);
 		InterlockedDecrement(&poolCnt);
 
@@ -97,9 +99,9 @@ public:
 		// bPreConstructor가 꺼져 있는 경우 할당마다 생성자가 호출
 		//----------------------------------------
 		if (!bPreConstructor)
-			new (maskedAllocNode) T();
-		
-		return &(maskedAllocNode->instance);
+			new (maskedT) T();
+
+		return &(maskedT->instance);
 	}
 
 	bool freeObject(T* objectPtr)
@@ -111,19 +113,15 @@ public:
 			return false;
 		}
 
-		//--------------------------------------------------
-		// freeNode(유저 영역의 메모리 주소)의 상위 17비트를 사용하여 노드 ID 부여
-		//--------------------------------------------------
-		ULONGLONG nodeID = InterlockedIncrement(&nodeSequence) % (1 << 17);
-		freeNode = (Node*)((nodeID << 47) | (ULONGLONG)freeNode);
-
 		Node* t;
+		Node* nextTop;
 		do
 		{
 			t = top;
-			Node* maskedFreeNode = (Node*)((ULONGLONG)freeNode & nodeMask);
-			maskedFreeNode->next = t;
-		} while (InterlockedCompareExchangePointer((void* volatile*)&top, freeNode, t) != t);
+			Node* maskedT = UnpackingNode(t);
+			freeNode->next = maskedT;
+			nextTop = PackingNode(freeNode, GetNodeStamp(t) + 1);
+		} while (InterlockedCompareExchangePointer((void* volatile*)&top, nextTop, t) != t);
 		InterlockedIncrement(&poolCnt);
 
 		if (!bPreConstructor)
@@ -137,19 +135,30 @@ public:
 		return poolCnt;
 	}
 
+
+	inline Node* PackingNode(Node* ptr, ULONGLONG stamp)
+	{
+		return (Node*)((ULONGLONG)ptr | (stamp << stampShift));
+	}
+	inline Node* UnpackingNode(Node* ptr)
+	{
+		return (Node*)((ULONGLONG)ptr & nodeMask);
+	}
+	inline ULONGLONG GetNodeStamp(Node* ptr)
+	{
+		return (ULONGLONG)ptr >> stampShift;
+	}
+
 private:
 	Node* top;
 	bool bPreConstructor;
 	USHORT poolSeed;
 	ULONG poolCnt;
 
-	//--------------------------------------------
-	// 노드 생성 시, 노드 포인터 상위17비트에 저장하는 노드의 고유 인덱스
-	//--------------------------------------------
-	ULONGLONG nodeSequence;
 
 	//--------------------------------------------
 	// Node*의 하위 47비트 추출할 마스크
 	//--------------------------------------------
 	static const ULONGLONG nodeMask = (1ULL << 47) - 1;
+	static const ULONG stampShift = 47;
 };

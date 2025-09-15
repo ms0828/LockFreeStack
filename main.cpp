@@ -10,7 +10,7 @@ using namespace std;
 
 struct TestST
 {
-	char ch[4096];
+	char ch[12];
 };
 
 CLockFreeStack<int> g_Stack;
@@ -49,8 +49,27 @@ unsigned int PushAndPopProc1(void* arg)
 
 		for (int i = 0; i < dfTestNum; ++i)
 		{
-			int ret = g_Stack.Pop();
+			int ret;
+			bool popRet = g_Stack.Pop(ret);
+			if (popRet == false)
+			{
+				_LOG(dfLOG_LEVEL_DEBUG, L"[Error] Pop Ret is fail\n");
+				exit(1);
+			}
+
+			//--------------------------------------------------------
+			// ABA 검출 테스트
+			// - 노드 풀에 노드 반환 시, 데이터 0으로 초기화
+			// - 근데 pop한 노드 데이터가 0이라면 top이 노드 풀에 반환한 노드를 가리키고 있는 것
+			//--------------------------------------------------------
+			if (ret != 1)
+			{
+				_LOG(dfLOG_LEVEL_DEBUG, L"[Error] Pop Ret == %d\n", ret);
+				exit(1);
+			}
 		}
+
+		printf("ok\n");
 	}
 
 	return 0;
@@ -100,7 +119,26 @@ unsigned int PushAndPopProc2(void* arg)
 		//--------------------------------------------------
 		for (int i = 0; i < dfTestNum; ++i)
 		{
-			g_Stack.Pop();
+			int ret;
+			bool popRet = g_Stack.Pop(ret);
+			if (popRet == false)
+			{
+				_LOG(dfLOG_LEVEL_DEBUG, L"[Error] Pop Ret is fail\n");
+				exit(1);
+			}
+
+
+			//--------------------------------------------------------
+			// ABA 검출 테스트
+			// - 노드 풀에 노드 반환 시, 데이터 0으로 초기화
+			// - 근데 pop한 노드 데이터가 0이라면 top이 노드 풀에 반환한 노드를 가리키고 있는 것
+			//--------------------------------------------------------
+			if (ret != 1)
+			{
+				_LOG(dfLOG_LEVEL_DEBUG, L"[Error] Pop Ret == %d\n", ret);
+				exit(1);
+			}
+			
 		}
 		SetEvent(popEndEvent);
 		_LOG(dfLOG_LEVEL_DEBUG, L"[Check] A Thread Complete Pop \n");
@@ -188,9 +226,20 @@ void Test2()
 
 int main()
 {
-	InitLog(dfLOG_LEVEL_DEBUG, ELogMode::CONSOLE);
+	InitLog(dfLOG_LEVEL_DEBUG, ELogMode::FILE_DIRECT);
 
-	Test1();
+	//Test1();
 
+	int ret;
+	int a = 1;
+	g_Stack.Push(a);
+	g_Stack.Push(a);
+	g_Stack.Push(a);
+	g_Stack.Push(a);
+	g_Stack.Pop(ret);
+	g_Stack.Pop(ret);
+	g_Stack.Pop(ret);
+	g_Stack.Pop(ret);
+	printf("ret : %d\n", ret);
 	return 0;
 }
