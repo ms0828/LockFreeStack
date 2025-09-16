@@ -240,6 +240,7 @@ int main()
 	g_Stack.Pop(ret);
 	g_Stack.Pop(ret);
 	g_Stack.Pop(ret);
+	g_Stack.Pop(ret);
 	printf("ret : %d\n", ret);
 	return 0;
 }

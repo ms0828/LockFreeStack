@@ -69,10 +69,10 @@ public:
 		do
 		{
 			t = top;
-			if (t == nullptr)
+			maskedT = UnpackingNode(t);
+			if (maskedT == nullptr)
 				return false;
 
-			maskedT = UnpackingNode(t);
 			nextTop = PackingNode(maskedT->next, GetNodeStamp(t) + 1);
 		}while(InterlockedCompareExchangePointer((void* volatile *)&top, nextTop, t) != t);
 		InterlockedDecrement(&stackSize);
