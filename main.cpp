@@ -152,11 +152,11 @@ unsigned int PushAndPopProc2(void* arg)
 		//---------------------------------------------------
 		// 락 프리 스택의 노드 풀 카운트 검증 
 		//---------------------------------------------------
-		if (g_Stack.nodePool.GetPoolCnt() != dfTestNum * dfThreadNum)
+		/*if (g_Stack.nodePool.GetPoolCnt() != dfTestNum * dfThreadNum)
 		{
 			_LOG(dfLOG_LEVEL_DEBUG, L"[Error] Node Pool Count = %ld \n", g_Stack.nodePool.GetPoolCnt());
 			exit(1);
-		}
+		}*/
 
 		SetEvent(cycleEndEvent);
 	}
@@ -228,9 +228,9 @@ int main()
 {
 	InitLog(dfLOG_LEVEL_DEBUG, ELogMode::FILE_DIRECT);
 
-	//Test1();
+	Test1();
 
-	int ret;
+	/*int ret;
 	int a = 1;
 	g_Stack.Push(a);
 	g_Stack.Push(a);
@@ -241,6 +241,6 @@ int main()
 	g_Stack.Pop(ret);
 	g_Stack.Pop(ret);
 	g_Stack.Pop(ret);
-	printf("ret : %d\n", ret);
+	printf("ret : %d\n", ret);*/
 	return 0;
 }

@@ -1,6 +1,6 @@
 #pragma once
 #include <Windows.h>
-#include "ObjectPool.h"
+#include "ObjectPool_LF.h"
 #include "Log.h"
 
 
@@ -28,7 +28,7 @@ public:
 public:
 	CLockFreeStack() : nodePool(false)
 	{
-		stackSize = 0;
+		size = 0;
 		top = nullptr;
 	}
 
@@ -57,11 +57,11 @@ public:
 			newNode->next = maskedT;
 			nextTop = PackingNode(newNode, GetNodeStamp(t) + 1);
 		} while (InterlockedCompareExchangePointer((void* volatile*)&top, nextTop, t) != t);
-		InterlockedIncrement(&stackSize);
+		InterlockedIncrement(&size);
 	}
 	
 
-	boolean Pop(T& value)
+	bool Pop(T& value)
 	{
 		Node* t;
 		Node* nextTop;
@@ -75,7 +75,7 @@ public:
 
 			nextTop = PackingNode(maskedT->next, GetNodeStamp(t) + 1);
 		}while(InterlockedCompareExchangePointer((void* volatile *)&top, nextTop, t) != t);
-		InterlockedDecrement(&stackSize);
+		InterlockedDecrement(&size);
 		
 		//-----------------------------------------
 		// Pop한 노드의 값 반환 및 노드 풀에 반납
@@ -84,6 +84,12 @@ public:
 		nodePool.freeObject(maskedT);
 		return true;
 	}
+
+	inline ULONG GetSize()
+	{
+		return size;
+	}
+
 
 
 private:
@@ -101,9 +107,9 @@ private:
 	}
 
 
-public:
+private:
 	Node* top;
-	ULONGLONG stackSize;
+	ULONG size;
 
 	//--------------------------------------------
 	// Node*의 하위 47비트 추출할 마스크
@@ -112,7 +118,7 @@ public:
 	static const ULONG stampShift = 47;
 
 
-	CObjectPool<CLockFreeStack::Node> nodePool;
+	CObjectPool_LF<CLockFreeStack<T>::Node> nodePool;
 };
 
 
